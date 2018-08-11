@@ -8,14 +8,12 @@ sub mixtape_parse(Str $mix --> Str) {
 		die "mixtape.moe error " ~ %res;
 	}
 
-	return %res<files>[0]<url>;
+	%res<files>[0]<url>;
 }
 sub id($x) { $x; }
 
 sub uploader(Str $url, Str $param, Str $fname --> Str) {
-	my $ret = (run qqx/curl -sS -F "$param=@$fname" $url/).command[0];
-	$ret ~~ s/\n//;
-	return $ret;
+	(run qqx/curl -sS -F "$param=@$fname" $url/).command[0].chomp;
 }
 
 sub print-and-copy(Str $s) {
@@ -31,15 +29,12 @@ sub manage_uploads(Str $url, Str $param, &postprocess=&id) {
 		@uploads = @*ARGS[1 .. *];
 	}
 
-	for @uploads -> $x {
-		# need a mutable copy
-		my $y = $x;
-
+	for @uploads -> $x is copy {
 		# if it doesn't have a files extension, force curl to name it 't.txt' so some file hosts will add a file extension of .txt
-		if $y.split('/').tail.split('.').elems == 1 {
-			$y = "$y;filename=t.txt";
+		if $x.split('/').tail.split('.').elems == 1 {
+			$x ~= ";filename=t.txt";
 		}
-		print-and-copy(postprocess(uploader($url, $param, $y)));
+		print-and-copy(postprocess(uploader($url, $param, $x)));
 	}
 }
 
@@ -49,5 +44,5 @@ given @*ARGS[0] {
 	when "sprunge" { manage_uploads("http://sprunge.us", "sprunge"); }
 	when "ix" { manage_uploads("http://ix.io", "f:1"); }
 	when Str { die "Unknown host @*ARGS[0]"; }
-	when Any { die "No host given!"; }
+	default { die "No host given!"; }
 }
