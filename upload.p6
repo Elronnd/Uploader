@@ -2,7 +2,7 @@
 
 use JSON::Fast;
 
-sub mixtape_parse(Str $mix --> Str) {
+sub mixtape-parse(Str $mix --> Str) {
 	my %res = from-json $mix;
 	unless %res<success> {
 		die "mixtape.moe error " ~ %res;
@@ -10,10 +10,18 @@ sub mixtape_parse(Str $mix --> Str) {
 
 	%res<files>[0]<url>;
 }
+sub hastebin-parse($haste) {
+	my %res = from-json $haste;
+	unless %res<key> {
+		die "hastebin error " ~ %res;
+	}
+	"https://hastebin.com/" ~ %res<key>;
+}
+
 sub id($x) { $x; }
 
-sub uploader(Str $url, Str $param, Str $fname --> Str) {
-	(run qqx/curl -sS -F "$param=@$fname" $url/).command[0].chomp;
+sub uploader($url, $param, $fname, $upload-char) {
+	(run qqx/curl -sS -F "$param=$upload-char$fname" $url/).command[0].chomp;
 }
 
 sub print-and-copy(Str $s) {
@@ -21,7 +29,7 @@ sub print-and-copy(Str $s) {
 	shell "echo \"$s\"|xsel -i -b";
 }
 
-sub manage_uploads(Str $url, Str $param, &postprocess=&id) {
+sub manage_uploads(Str $url, Str $param, &postprocess=&id, $upload-char="@") {
 	my @uploads;
 	if (@*ARGS.elems == 1) {
 		@uploads.push("-");
@@ -34,15 +42,16 @@ sub manage_uploads(Str $url, Str $param, &postprocess=&id) {
 		if $x.split('/').tail.split('.').elems == 1 {
 			$x ~= ";filename=t.txt";
 		}
-		print-and-copy(postprocess(uploader($url, $param, $x)));
+		print-and-copy(postprocess(uploader($url, $param, $x, $upload-char)));
 	}
 }
 
 given @*ARGS[0] {
 	when "0x0" { manage_uploads("https://0x0.st", "file"); }
-	when "mixtape" { manage_uploads("https://mixtape.moe/upload.php", "files[]", &mixtape_parse); }
+	when "mixtape" { manage_uploads("https://mixtape.moe/upload.php", "files[]", &mixtape-parse); }
 	when "sprunge" { manage_uploads("http://sprunge.us", "sprunge"); }
 	when "ix" { manage_uploads("http://ix.io", "f:1"); }
+	when "haste" { manage_uploads("https://hastebin.com/documents", "data", &hastebin-parse, "<"); }
 	when Str { die "Unknown host @*ARGS[0]"; }
 	default { die "No host given!"; }
 }
