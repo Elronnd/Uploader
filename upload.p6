@@ -20,8 +20,8 @@ sub hastebin-parse($haste) {
 
 sub id($x) { $x; }
 
-sub uploader($url, $param, $fname, $upload-char) {
-	(run qqx/curl -sS -F "$param=$upload-char$fname" $url/).command[0].chomp;
+sub uploader($url, $param, $fname, $upload-char, $additional-params) {
+	(run qqx/curl -sS -F "$param=$upload-char$fname" $additional-params $url/).command[0].chomp;
 }
 
 sub print-and-copy(Str $s) {
@@ -29,7 +29,7 @@ sub print-and-copy(Str $s) {
 	shell "echo \"$s\"|xsel -i -b";
 }
 
-sub manage_uploads(Str $url, Str $param, &postprocess=&id, $upload-char="@") {
+sub manage_uploads(Str $url, Str $param, :&postprocess=&id, :$upload-char="@", :$additional-params="") {
 	my @uploads;
 	if (@*ARGS.elems == 1) {
 		@uploads.push("-");
@@ -42,16 +42,16 @@ sub manage_uploads(Str $url, Str $param, &postprocess=&id, $upload-char="@") {
 		if $x.split('/').tail.split('.').elems == 1 {
 			$x ~= ";filename=t.txt";
 		}
-		print-and-copy(postprocess(uploader($url, $param, $x, $upload-char)));
+		print-and-copy(postprocess(uploader($url, $param, $x, $upload-char, $additional-params)));
 	}
 }
 
 given @*ARGS[0] {
 	when "0x0" { manage_uploads("https://0x0.st", "file"); }
-	when "mixtape" { manage_uploads("https://mixtape.moe/upload.php", "files[]", &mixtape-parse); }
+	when "catbox" { manage_uploads("https://catbox.moe/user/api.php", "fileToUpload", additional-params => "-Freqtype=fileupload"); }
 	when "sprunge" { manage_uploads("http://sprunge.us", "sprunge"); }
 	when "ix" { manage_uploads("http://ix.io", "f:1"); }
-	when "haste" { manage_uploads("https://hastebin.com/documents", "data", &hastebin-parse, "<"); }
+	when "haste" { manage_uploads("https://hastebin.com/documents", "data", postprocess => &hastebin-parse, upload-char => "<"); }
 	when Str { die "Unknown host @*ARGS[0]"; }
 	default { die "No host given!"; }
 }
