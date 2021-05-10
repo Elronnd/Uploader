@@ -2,37 +2,37 @@
 
 use JSON::Fast;
 
-sub mixtape-parse(Str $mix --> Str) {
-	my %res = from-json $mix;
-	unless %res<success> {
-		die "mixtape.moe error " ~ %res;
-	}
-
-	%res<files>[0]<url>;
-}
-sub hastebin-parse($haste) {
-	my %res = from-json $haste;
-	unless %res<key> {
-		die "hastebin error " ~ %res;
-	}
-	"https://hastebin.com/" ~ %res<key>;
-}
-
 sub id($x) { $x; }
 
-sub uploader($url, $param, $fname, $upload-char, $additional-params) {
-	(run qqx/curl -sS -F "$param=$upload-char$fname" $additional-params $url/).command[0].chomp;
+sub pipe-to($what, @command) {
+	my $ret = run |@command, :in, :out;
+	$ret.in.spurt: $what, :close;
+	$ret
+}
+
+sub uploader($sponge, $url, $param, $fname, $upload-char, $additional-params) {
+	my @command = «curl -sS -F "$param=$upload-char$fname" $additional-params $url»;
+	my $cmd;
+	if $sponge {
+		$cmd = pipe-to $*IN.slurp, @command;
+	} else {
+		$cmd = run |@command, :out;
+	}
+
+	chomp $cmd.out.slurp: :close;
 }
 
 sub print-and-copy(Str $s) {
 	say $s;
-	shell "echo \"$s\"|xsel -i -b";
+	pipe-to $s, <xsel -i -b>;
 }
 
 sub manage_uploads(Str $url, Str $param, :&postprocess=&id, :$upload-char="@", :$additional-params="") {
+	my $sponge = False;
 	my @uploads;
 	if (@*ARGS.elems == 1) {
 		@uploads.push("-");
+		$sponge = True;
 	} else {
 		@uploads = @*ARGS[1 .. *];
 	}
@@ -42,7 +42,7 @@ sub manage_uploads(Str $url, Str $param, :&postprocess=&id, :$upload-char="@", :
 		if $x.split('/').tail.split('.').elems == 1 {
 			$x ~= ";filename=t.txt";
 		}
-		print-and-copy(postprocess(uploader($url, $param, $x, $upload-char, $additional-params)));
+		print-and-copy(postprocess(uploader($sponge, $url, $param, $x, $upload-char, $additional-params)));
 	}
 }
 
@@ -51,7 +51,6 @@ given @*ARGS[0] {
 	when "catbox" { manage_uploads("https://catbox.moe/user/api.php", "fileToUpload", additional-params => "-Freqtype=fileupload"); }
 	when "sprunge" { manage_uploads("http://sprunge.us", "sprunge"); }
 	when "ix" { manage_uploads("http://ix.io", "f:1"); }
-	when "haste" { manage_uploads("https://hastebin.com/documents", "data", postprocess => &hastebin-parse, upload-char => "<"); }
 	when Str { die "Unknown host @*ARGS[0]"; }
 	default { die "No host given!"; }
 }
